@@ -54,8 +54,8 @@ class DartAnalyzeHook {
       // Get list of all Dart files in the package not ignored by git
       final ProcessResult gitResult = await runProcess(
         'git',
-        ['ls-files', '--cached', '--others', '--exclude-standard', '.'],
-        runInShell: true,
+        ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '.'],
+        runInShell: false,
         workingDirectory: packageRoot,
       );
 
@@ -64,10 +64,11 @@ class DartAnalyzeHook {
         await logToFile(gitResult.stderr as String);
         printStdout(jsonEncode({'decision': 'continue', 'reason': 'Failed to get git files.'}));
         onExit(0); // Exit 0 so Antigravity captures the stdout JSON
+        return;
       }
 
       final List<String> files = (gitResult.stdout as String)
-          .split('\n')
+          .split('\x00')
           .where((line) => line.isNotEmpty && line.endsWith('.dart'))
           .where((line) => !line.endsWith('.g.dart') && !line.endsWith('.mocks.dart'))
           .map((filePath) => path.join(packageRoot, filePath))
@@ -78,6 +79,7 @@ class DartAnalyzeHook {
         await logToFile('No dart files found to analyze.');
         printStdout(jsonEncode({'decision': 'stop'}));
         onExit(0);
+        return;
       }
 
       await logToFile('Running dart analyze on ${files.length} files...');
@@ -87,7 +89,7 @@ class DartAnalyzeHook {
         'analyze',
         '--fatal-infos',
         ...files,
-      ], runInShell: true);
+      ], runInShell: false);
 
       final int exitCode = result.exitCode;
       final output = result.stdout as String;
@@ -100,6 +102,7 @@ class DartAnalyzeHook {
         await logToFile('Analysis passed');
         printStdout(jsonEncode({'decision': 'stop'}));
         onExit(0);
+        return;
       }
 
       // If there are issues, tell Antigravity to CONTINUE and provide the reason.
@@ -108,6 +111,7 @@ class DartAnalyzeHook {
       final reason = 'Analyzer issues found. Please fix these before finishing:\n\n$output$error';
       printStdout(jsonEncode({'decision': 'continue', 'reason': reason}));
       onExit(0); // Exit 0 so Antigravity captures the stdout JSON.
+      return;
     } catch (e, stackTrace) {
       await logToFile('UNHANDLED EXCEPTION: $e');
       await logToFile(stackTrace.toString());
@@ -115,6 +119,7 @@ class DartAnalyzeHook {
         jsonEncode({'decision': 'continue', 'reason': 'Unhandled exception in dart_analyze hook.'}),
       );
       onExit(1);
+      return;
     }
   }
 }

@@ -61,7 +61,7 @@ void main() {
             return ProcessResult(0, 0, '/repo/root', '');
           }
           if (cmd == 'git' && args.first == 'status') {
-            return ProcessResult(0, 0, 'M  file.dart', '');
+            return ProcessResult(0, 0, 'M  file.dart\x00', '');
           }
           if (cmd == 'dart' && args.first == 'format') {
             return ProcessResult(0, 0, 'Formatted file.dart', '');
@@ -78,6 +78,77 @@ void main() {
 
       expect(stdoutMessage, equals(jsonEncode({})));
       expect(exitCode, equals(0));
+    });
+
+    test('Handles filenames with spaces', () async {
+      String? stdoutMessage;
+      int? exitCode;
+      List<String>? dartFormatArgs;
+
+      final hook = DartFormatHook(
+        runProcess: (cmd, args, {bool runInShell = false, String? workingDirectory}) async {
+          if (cmd == 'git' && args.first == 'rev-parse') {
+            return ProcessResult(0, 0, '/repo/root', '');
+          }
+          if (cmd == 'git' && args.first == 'status') {
+            return ProcessResult(0, 0, 'M  lib/my file.dart\x00M  lib/other.dart\x00', '');
+          }
+          if (cmd == 'dart' && args.first == 'format') {
+            dartFormatArgs = args;
+            return ProcessResult(0, 0, 'Formatted files', '');
+          }
+          return ProcessResult(0, 0, '', '');
+        },
+        fileExists: (path) => true,
+        printStdout: (msg) => stdoutMessage = msg,
+        logToFile: (msg) async {},
+        onExit: (code) => exitCode = code,
+      );
+
+      await hook.run([], '/current/path');
+
+      expect(dartFormatArgs, contains('/repo/root/lib/my file.dart'));
+      expect(dartFormatArgs, contains('/repo/root/lib/other.dart'));
+      expect(exitCode, equals(0));
+    });
+
+    test('Exits 1 on unhandled exception', () async {
+      int? exitCode;
+
+      final hook = DartFormatHook(
+        runProcess: (cmd, args, {bool runInShell = false, String? workingDirectory}) async {
+          throw Exception('Simulated crash');
+        },
+        fileExists: (path) => true,
+        printStdout: (msg) {},
+        logToFile: (msg) async {},
+        onExit: (code) => exitCode = code,
+      );
+
+      await hook.run([], '/current/path');
+
+      expect(exitCode, equals(1));
+    });
+
+    test('Exits 1 when git rev-parse fails', () async {
+      int? exitCode;
+
+      final hook = DartFormatHook(
+        runProcess: (cmd, args, {bool runInShell = false, String? workingDirectory}) async {
+          if (cmd == 'git' && args.first == 'rev-parse') {
+            return ProcessResult(0, 1, '', 'Git error');
+          }
+          return ProcessResult(0, 0, '', '');
+        },
+        fileExists: (path) => true,
+        printStdout: (msg) {},
+        logToFile: (msg) async {},
+        onExit: (code) => exitCode = code,
+      );
+
+      await hook.run([], '/current/path');
+
+      expect(exitCode, equals(1));
     });
   });
 }

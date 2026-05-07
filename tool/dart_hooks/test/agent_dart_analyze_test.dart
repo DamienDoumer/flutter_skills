@@ -20,7 +20,7 @@ void main() {
           return ProcessResult(0, 0, '', '');
         },
         fileExists: (path) => true,
-        logToFile: (msg) async => loggedMessage = msg,
+        logToFile: (msg) async => loggedMessage = (loggedMessage ?? '') + msg + '\n',
         onExit: (code) {},
       );
 
@@ -36,7 +36,7 @@ void main() {
       final hook = DartAnalyzeHook(
         runProcess: (cmd, args, {bool runInShell = false, String? workingDirectory}) async {
           if (cmd == 'git' && args.first == 'ls-files') {
-            return ProcessResult(0, 0, 'lib/file.dart', '');
+            return ProcessResult(0, 0, 'lib/file.dart\x00', '');
           }
           if (cmd == 'dart' && args.first == 'analyze') {
             return ProcessResult(0, 0, 'No issues found.', '');
@@ -62,10 +62,10 @@ void main() {
       final hook = DartAnalyzeHook(
         runProcess: (cmd, args, {bool runInShell = false, String? workingDirectory}) async {
           if (cmd == 'git' && args.first == 'ls-files') {
-            return ProcessResult(0, 0, 'lib/file.dart', '');
+            return ProcessResult(0, 0, 'lib/file.dart\x00', '');
           }
           if (cmd == 'dart' && args.first == 'analyze') {
-            return ProcessResult(1, 0, 'Issue found.', '');
+            return ProcessResult(0, 1, 'Issue found.', '');
           }
           return ProcessResult(0, 0, '', '');
         },
@@ -78,7 +78,54 @@ void main() {
       await hook.run([], '/current/path', '/package/root');
 
       expect(stdoutMessage, contains('"decision":"continue"'));
-      expect(exitCode, equals(0)); // Exits 0 so framework gets JSON
+      expect(exitCode, equals(0));
+    });
+
+    test('Handles filenames with spaces', () async {
+      String? stdoutMessage;
+      int? exitCode;
+      List<String>? dartAnalyzeArgs;
+
+      final hook = DartAnalyzeHook(
+        runProcess: (cmd, args, {bool runInShell = false, String? workingDirectory}) async {
+          if (cmd == 'git' && args.first == 'ls-files') {
+            return ProcessResult(0, 0, 'lib/my file.dart\x00lib/other.dart\x00', '');
+          }
+          if (cmd == 'dart' && args.first == 'analyze') {
+            dartAnalyzeArgs = args;
+            return ProcessResult(0, 0, 'No issues found.', '');
+          }
+          return ProcessResult(0, 0, '', '');
+        },
+        fileExists: (path) => true,
+        printStdout: (msg) => stdoutMessage = msg,
+        logToFile: (msg) async {},
+        onExit: (code) => exitCode = code,
+      );
+
+      await hook.run([], '/current/path', '/package/root');
+
+      expect(dartAnalyzeArgs, contains('/package/root/lib/my file.dart'));
+      expect(dartAnalyzeArgs, contains('/package/root/lib/other.dart'));
+      expect(exitCode, equals(0));
+    });
+
+    test('Exits 1 on unhandled exception', () async {
+      int? exitCode;
+
+      final hook = DartAnalyzeHook(
+        runProcess: (cmd, args, {bool runInShell = false, String? workingDirectory}) async {
+          throw Exception('Simulated crash');
+        },
+        fileExists: (path) => true,
+        printStdout: (msg) {},
+        logToFile: (msg) async {},
+        onExit: (code) => exitCode = code,
+      );
+
+      await hook.run([], '/current/path', '/package/root');
+
+      expect(exitCode, equals(1));
     });
   });
 }

@@ -59,12 +59,13 @@ class DartFormatHook {
       final ProcessResult repoRootResult = await runProcess('git', [
         'rev-parse',
         '--show-toplevel',
-      ], runInShell: true);
+      ], runInShell: false);
 
       if (repoRootResult.exitCode != 0) {
         await logToFile('ERROR: Failed to get git repo root.');
         emitEmptyResult();
         onExit(1);
+        return;
       }
       final String repoRoot = (repoRootResult.stdout as String).trim();
 
@@ -72,32 +73,38 @@ class DartFormatHook {
       final ProcessResult gitResult = await runProcess('git', [
         'status',
         '--porcelain',
-      ], runInShell: true);
+        '-z',
+      ], runInShell: false);
 
       if (gitResult.exitCode != 0) {
         await logToFile('ERROR: git status failed with exit code ${gitResult.exitCode}');
         await logToFile(gitResult.stderr as String);
         emitEmptyResult();
         onExit(1);
+        return;
       }
 
-      final stdoutStr = gitResult.stdout as String;
-      final List<String> modifiedDartFiles = stdoutStr
-          .split('\n')
-          .map((line) => line.trim())
-          .where((line) => line.isNotEmpty && line.endsWith('.dart'))
-          .map((line) {
-            final List<String> parts = line.split(RegExp(r'\s+'));
-            return parts.length > 1 ? parts.last : '';
-          })
-          .map((filePath) => path.join(repoRoot, filePath))
-          .where((filePath) => filePath.isNotEmpty && fileExists(filePath))
-          .toList();
+      final List<String> modifiedDartFiles = [];
+      final List<String> entries = (gitResult.stdout as String).split('\x00');
+      for (var i = 0; i < entries.length; i++) {
+        final entry = entries[i];
+        if (entry.length < 4) continue;
+        final status = entry.substring(0, 2);
+        var filePath = entry.substring(3);
+        if (status.startsWith('R') || status.startsWith('C')) {
+          if (i + 1 < entries.length) filePath = entries[++i];
+        }
+        if (filePath.endsWith('.dart')) {
+          final fullPath = path.join(repoRoot, filePath);
+          if (fileExists(fullPath)) modifiedDartFiles.add(fullPath);
+        }
+      }
 
       if (modifiedDartFiles.isEmpty) {
         await logToFile('No modified dart files, exiting.');
         emitEmptyResult();
         onExit(0);
+        return;
       }
 
       await logToFile('Running dart format on: ${modifiedDartFiles.join(', ')}');
@@ -107,7 +114,7 @@ class DartFormatHook {
         'format',
         '--output=write',
         ...modifiedDartFiles,
-      ], runInShell: true);
+      ], runInShell: false);
 
       await logToFile('dart format finished with exit code ${result.exitCode}');
       await logToFile('STDOUT:\n${result.stdout}');
@@ -116,15 +123,18 @@ class DartFormatHook {
       if (result.exitCode != 0) {
         emitEmptyResult();
         onExit(result.exitCode);
+        return;
       }
 
       emitEmptyResult();
       onExit(0);
+      return;
     } catch (e, stackTrace) {
       await logToFile('UNHANDLED EXCEPTION: $e');
       await logToFile(stackTrace.toString());
       emitEmptyResult();
       onExit(1);
+      return;
     }
   }
 }
