@@ -62,7 +62,7 @@ Setup validation in your Dart project:
    }
    ```
 
-3. (Optional) Create a configuration file `dart_skills_lint.yaml` in the root of your project to customize rules and directories for the CLI:
+3. **Recommended**: Create a configuration file `dart_skills_lint.yaml` in the root of your project to centralize your rules and directory settings. This ensures both the CLI and your automated tests use the same configuration.
    **Note:** If you use `validateSkills` directly in tests, you can load the `dart_skills_lint.yaml` file using `ConfigParser.loadConfig()` and pass it to `validateSkills` to share the same configuration as the CLI.
    ```yaml
    dart_skills_lint:

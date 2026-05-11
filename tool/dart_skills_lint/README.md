@@ -6,6 +6,7 @@ A static analysis linter for Agent Skills to ensure they meet the specification 
 - [Overview](#overview)
 - [Installation](#installation)
 - [Usage](#usage)
+  - [CLI vs Dart Test](#cli-vs-dart-test)
 - [Configuration](#configuration)
 - [Specification Validation](#specification-validation)
 - [Best Practices](#best-practices)
@@ -45,7 +46,23 @@ dart pub global activate dart_skills_lint
 
 ## Usage
 
-There are three ways to interact with `dart_skills_lint`:
+There are three ways to interact with `dart_skills_lint`.
+
+### CLI vs Dart Test
+
+Depending on your workflow, you should choose the appropriate interaction mode:
+
+*   **Use the CLI when:**
+    *   **Ad-hoc Validation**: You want to quickly check a specific skill you are working on without running the entire test suite.
+    *   **Baseline Generation**: You are integrating the tool into a legacy repo and need to generate an ignore file (`--generate-baseline`).
+    *   **Automated Fixes**: You want to preview or apply fixes (`--fix`, `--fix-apply`) directly to the files.
+    *   **Pre-commit Hooks**: You want a fast, isolated check in a Git pre-commit hook.
+*   **Use Dart Test when:**
+    *   **CI/CD Integration**: You want to guarantee that no invalid skills are merged by failing the build alongside unit tests.
+    *   **Programmatic Configuration**: You need to inject custom rules or dynamic configurations that are hard to express in static YAML.
+    *   **Ecosystem Consistency**: You want developers to rely on the familiar `dart test` command rather than learning a new tool invocation.
+
+---
 
 ### 1. As a Command Line Tool with Arguments
 Run the linter against your skills or root skills directories by passing arguments.
