@@ -9,6 +9,7 @@ import 'package:logging/logging.dart';
 import 'package:meta/meta.dart';
 
 import 'config_parser.dart';
+import 'missing_defaults_exception.dart';
 import 'models/analysis_severity.dart';
 import 'models/check_type.dart';
 import 'models/skill_rule.dart';
@@ -71,7 +72,7 @@ Future<void> runApp(List<String> args) async {
   final skillDirPaths = results[_skillsDirectoryFlag] as List<String>;
   final individualSkillPaths = results[_skillOption] as List<String>;
 
-  final Map<String, AnalysisSeverity> resolvedRules = resolveRules(results, config);
+  final Map<String, AnalysisSeverity> resolvedRules = resolveRules(results);
 
   final printWarnings = results[_printWarningsFlag] as bool;
   final fastFail = results[_fastFailFlag] as bool;
@@ -311,37 +312,25 @@ Future<bool> validateSkillsInternal({
 }
 
 @visibleForTesting
-Map<String, AnalysisSeverity> resolveRules(ArgResults results, Configuration config) {
+Map<String, AnalysisSeverity> resolveRules(ArgResults results) {
   final resolved = <String, AnalysisSeverity>{};
 
-  // 1. Initialize with default severities from the registry.
-  for (final CheckType check in RuleRegistry.allChecks) {
-    resolved[check.name] = check.defaultSeverity;
-  }
-
-  // 2. Override with configurations from the YAML file.
-  resolved.addAll(config.configuredRules);
-
-  // 3. Override with CLI flags. CLI flags take highest precedence.
+  // Only load rules explicitly set via CLI flags.
   for (final CheckType check in RuleRegistry.allChecks) {
     final String name = check.name;
 
-    // Skip if the flag was not passed on the command line.
     if (!results.wasParsed(name)) {
       continue;
     }
 
-    // TODO(reidbaker): Handle options in addition to flags.
     final Object? value = results[name];
     if (value is! bool) {
       continue;
     }
 
     if (value) {
-      // If the user explicitly enabled the rule via flag (e.g., --rule), set to error.
       resolved[name] = AnalysisSeverity.error;
     } else {
-      // If the user explicitly disabled the rule via flag (e.g., --no-rule).
       resolved[name] = AnalysisSeverity.disabled;
     }
   }
@@ -355,9 +344,4 @@ void _printUsage(ArgParser parser, [String? error]) {
   }
   _log.info('Usage: dart_skills_lint [options] --$_skillsDirectoryFlag <$_skillsDirectoryFlag>');
   _log.info(parser.usage);
-}
-
-class MissingDefaultsException implements Exception {
-  MissingDefaultsException(this.defaults);
-  final List<String> defaults;
 }

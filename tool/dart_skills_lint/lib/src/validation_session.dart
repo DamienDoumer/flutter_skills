@@ -262,7 +262,12 @@ class ValidationSession {
   }
 
   Map<String, AnalysisSeverity> _resolveRulesForPath(String normalizedPath) {
-    final localRules = Map<String, AnalysisSeverity>.from(resolvedRules);
+    final localRules = <String, AnalysisSeverity>{};
+
+    // 1. Global Config (from YAML)
+    localRules.addAll(config.configuredRules);
+
+    // 2. Path-Specific Config (from YAML)
     for (final ({String normalizedPath, DirectoryConfig config}) entry
         in _normalizedDirectoryConfigs) {
       if (normalizedPath.startsWith(entry.normalizedPath)) {
@@ -270,6 +275,10 @@ class ValidationSession {
         break;
       }
     }
+
+    // 3. Overrides (CLI flags or API caller) take highest precedence
+    localRules.addAll(resolvedRules);
+
     return localRules;
   }
 
