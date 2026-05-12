@@ -84,6 +84,8 @@ Future<void> runApp(List<String> args) async {
   String? ignoreFileOverride;
   if (results.wasParsed(_ignoreFileOption)) {
     ignoreFileOverride = results[_ignoreFileOption] as String?;
+  } else {
+    ignoreFileOverride = null;
   }
 
   var success = false;
@@ -176,7 +178,12 @@ ArgParser _createArgParser(String helpFlag) {
 
 Future<Configuration?> _loadConfig(ArgResults results) async {
   final ignoreConfig = results[_ignoreConfigFlag] as bool;
-  final Configuration config = ignoreConfig ? Configuration() : await ConfigParser.loadConfig();
+  final Configuration config;
+  if (ignoreConfig) {
+    config = Configuration();
+  } else {
+    config = await ConfigParser.loadConfig();
+  }
   if (ignoreConfig && !(results[_quietFlag] as bool)) {
     _log.info('Ignoring configuration file due to $_ignoreConfigFlag flag');
   }
@@ -201,7 +208,7 @@ Future<Configuration?> _loadConfig(ArgResults results) async {
 /// Validates skills based on the provided configuration.
 ///
 /// This is the public API for validating skills. It does not support fixing
-/// lints as that feature is currently considered internal to the CLI.
+/// lints as that feature is considered internal to the CLI.
 ///
 /// [skillDirPaths] is a list of directories containing multiple skills.
 /// [individualSkillPaths] is a list of paths to individual skill directories.
@@ -213,7 +220,9 @@ Future<Configuration?> _loadConfig(ArgResults results) async {
 /// [ignoreFileOverride] is an optional path to a baseline file to use.
 /// [config] is the loaded configuration.
 ///
-/// Returns `true` if all validations passed (or if generating a baseline), `false` otherwise.
+/// Returns a [Future] that resolves to `true` if all skills validated successfully
+/// (or if [generateBaseline] is true), and `false` if any validation failures
+/// were encountered.
 Future<bool> validateSkills({
   List<String> skillDirPaths = const [],
   List<String> individualSkillPaths = const [],

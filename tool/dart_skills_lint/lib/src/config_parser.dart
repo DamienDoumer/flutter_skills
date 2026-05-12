@@ -71,7 +71,9 @@ class ConfigParser {
         }
       }
     } catch (e) {
-      _log.warning('Failed to parse $resolvedPath: $e');
+      final message = 'Failed to parse $resolvedPath: $e';
+      _log.severe(message);
+      return Configuration(parsingErrors: [message]);
     }
     return Configuration();
   }

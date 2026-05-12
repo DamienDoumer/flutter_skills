@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:dart_skills_lint/dart_skills_lint.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'test_utils.dart';
 
 void main() {
   test('validateSkills applies default rules when not specified', () async {
@@ -115,25 +116,153 @@ Line with space
       );
     });
   });
-}
 
-/// Creates a temporary directory for testing and automatically cleans it up.
-Future<void> withTempDir(Future<void> Function(Directory tempDir) action) async {
-  final Directory tempDir = await Directory.systemTemp.createTemp('api_test.');
-  try {
-    await action(tempDir);
-  } finally {
-    await tempDir.delete(recursive: true);
-  }
-}
+  test('loadConfig captures YAML parsing errors in Configuration.parsingErrors', () async {
+    await withTempDir((tempDir) async {
+      final configFile = File(p.join(tempDir.path, 'dart_skills_lint.yaml'));
+      await configFile.writeAsString('''
+dart_skills_lint:
+  rules:
+    check-trailing-whitespace: [error, warning
+'''); // unclosed bracket YAML syntax error
 
-/// Helper to create a dummy skill with specific SKILL.md contents.
-Future<Directory> createDummySkill(
-  Directory parentDir, {
-  required String name,
-  required String skillContent,
-}) async {
-  final Directory skillDir = await Directory(p.join(parentDir.path, name)).create(recursive: true);
-  await File(p.join(skillDir.path, 'SKILL.md')).writeAsString(skillContent);
-  return skillDir;
+      final Configuration config = await ConfigParser.loadConfig(path: configFile.path);
+
+      expect(config.parsingErrors, isNotEmpty);
+      expect(config.parsingErrors.first, contains('Failed to parse'));
+    });
+  });
+
+  test('Nested Directory Rule Inheritance merging and precedence override', () async {
+    await withTempDir((tempDir) {
+      // parent path: 'skills' (enables check-trailing-whitespace: error, description-length: warning)
+      // child path: 'skills/nested' (enables description-length: error, check-trailing-whitespace: disabled)
+      final config = Configuration(
+        directoryConfigs: [
+          DirectoryConfig(
+            path: p.join(tempDir.path, 'skills'),
+            rules: {
+              'check-trailing-whitespace': AnalysisSeverity.error,
+              'description-length': AnalysisSeverity.warning,
+            },
+          ),
+          DirectoryConfig(
+            path: p.join(tempDir.path, 'skills/nested'),
+            rules: {
+              'description-length': AnalysisSeverity.error,
+              'check-trailing-whitespace': AnalysisSeverity.disabled,
+            },
+          ),
+        ],
+      );
+
+      final session = ValidationSession(
+        config: config,
+        resolvedRules: {},
+        ignoreFileOverride: null,
+        customRules: [],
+        printWarnings: true,
+        fastFail: false,
+        quiet: true,
+        generateBaseline: false,
+        fix: false,
+        fixApply: false,
+      );
+
+      // Parent path should have parent rules applied
+      final Map<String, AnalysisSeverity> parentRules = session.resolveRulesForPath(
+        p.join(tempDir.path, 'skills/some-skill'),
+      );
+      expect(parentRules['check-trailing-whitespace'], equals(AnalysisSeverity.error));
+      expect(parentRules['description-length'], equals(AnalysisSeverity.warning));
+
+      // Child path should merge and override parent rules
+      final Map<String, AnalysisSeverity> childRules = session.resolveRulesForPath(
+        p.join(tempDir.path, 'skills/nested/nested-skill'),
+      );
+      expect(
+        childRules['check-trailing-whitespace'],
+        equals(AnalysisSeverity.disabled),
+      ); // child override
+      expect(childRules['description-length'], equals(AnalysisSeverity.error)); // child override
+    });
+  });
+
+  test('Nested Directory Ignore File Inheritance', () async {
+    await withTempDir((tempDir) {
+      // parent path: 'skills' (defines ignoreFile)
+      // child path: 'skills/nested' (does not define ignoreFile, should inherit)
+      final config = Configuration(
+        directoryConfigs: [
+          DirectoryConfig(
+            path: p.join(tempDir.path, 'skills'),
+            ignoreFile: 'parent_ignores.json',
+            rules: {},
+          ),
+          DirectoryConfig(path: p.join(tempDir.path, 'skills/nested'), rules: {}),
+        ],
+      );
+
+      final session = ValidationSession(
+        config: config,
+        resolvedRules: {},
+        ignoreFileOverride: null,
+        customRules: [],
+        printWarnings: true,
+        fastFail: false,
+        quiet: true,
+        generateBaseline: false,
+        fix: false,
+        fixApply: false,
+      );
+
+      // Parent ignore file should match
+      expect(
+        session.resolveIgnoreFile(p.join(tempDir.path, 'skills/some-skill')),
+        equals('parent_ignores.json'),
+      );
+
+      // Child should inherit parent ignore file
+      expect(
+        session.resolveIgnoreFile(p.join(tempDir.path, 'skills/nested/nested-skill')),
+        equals('parent_ignores.json'),
+      );
+    });
+  });
+
+  test('Absolute vs. Relative Path Resolution matching', () {
+    // Config defines path as relative 'skills'
+    final config = Configuration(
+      directoryConfigs: [
+        DirectoryConfig(
+          path: 'skills',
+          rules: {'check-trailing-whitespace': AnalysisSeverity.error},
+        ),
+      ],
+    );
+
+    final session = ValidationSession(
+      config: config,
+      resolvedRules: {},
+      ignoreFileOverride: null,
+      customRules: [],
+      printWarnings: true,
+      fastFail: false,
+      quiet: true,
+      generateBaseline: false,
+      fix: false,
+      fixApply: false,
+    );
+
+    // 1. Evaluate relative input: 'skills/my-skill'
+    final Map<String, AnalysisSeverity> relativeRules = session.resolveRulesForPath(
+      'skills/my-skill',
+    );
+    expect(relativeRules['check-trailing-whitespace'], equals(AnalysisSeverity.error));
+
+    // 2. Evaluate absolute input
+    final String absoluteInput = p.absolute('skills/my-skill');
+    final Map<String, AnalysisSeverity> absoluteRules = session.resolveRulesForPath(absoluteInput);
+    expect(absoluteRules['check-trailing-whitespace'], equals(AnalysisSeverity.error));
+  });
 }
