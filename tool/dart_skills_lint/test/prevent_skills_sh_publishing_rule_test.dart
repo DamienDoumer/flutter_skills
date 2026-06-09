@@ -33,7 +33,23 @@ void main() {
       final List<ValidationError> errors = await rule.validate(context);
 
       expect(errors, isNotEmpty);
-      expect(errors.first.message, contains('Skill is missing metadata: internal: true'));
+      expect(errors.first.message, contains('Missing "metadata" block in YAML frontmatter.'));
+    });
+
+    test('flags when metadata is not a map', () async {
+      final rule = PreventSkillsShPublishingRule(severity: AnalysisSeverity.warning);
+      final parsed =
+          loadYaml('name: my-skill\ndescription: Test\nmetadata: "some string"\n') as YamlMap;
+      final context = SkillContext(
+        directory: Directory('dummy'),
+        rawContent: '---\nname: my-skill\ndescription: Test\nmetadata: "some string"\n---\n',
+        parsedYaml: parsed,
+      );
+
+      final List<ValidationError> errors = await rule.validate(context);
+
+      expect(errors, isNotEmpty);
+      expect(errors.first.message, contains('"metadata" must be a YAML mapping (dictionary).'));
     });
 
     test('flags when metadata internal is false', () async {
@@ -49,7 +65,26 @@ void main() {
       final List<ValidationError> errors = await rule.validate(context);
 
       expect(errors, isNotEmpty);
-      expect(errors.first.message, contains('Skill is missing metadata: internal: true'));
+      expect(
+        errors.first.message,
+        contains('The "internal" field under "metadata" must be explicitly set to boolean true'),
+      );
+    });
+
+    test('flags when metadata internal is a string', () async {
+      final rule = PreventSkillsShPublishingRule(severity: AnalysisSeverity.warning);
+      final parsed =
+          loadYaml('name: my-skill\ndescription: Test\nmetadata:\n  internal: "True"\n') as YamlMap;
+      final context = SkillContext(
+        directory: Directory('dummy'),
+        rawContent: '---\nname: my-skill\ndescription: Test\nmetadata:\n  internal: "True"\n---\n',
+        parsedYaml: parsed,
+      );
+
+      final List<ValidationError> errors = await rule.validate(context);
+
+      expect(errors, isNotEmpty);
+      expect(errors.first.message, contains('is set to a string "True"'));
     });
 
     test('passes when metadata internal is true', () async {
