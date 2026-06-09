@@ -4,6 +4,8 @@ description: >
   Instructions for adding a new validation rule and CLI flag to dart_skills_lint.
   Use this skill when asked to create a new rule that validates aspects of skills
   (like frontmatter metadata).
+metadata:
+  internal: true
 ---
 
 # Add a New Validation Rule and Flag
