@@ -12,3 +12,10 @@ dart_skills_lint:
     - path: "skills"
       rules:
         check-trailing-whitespace: error
+        prevent-skills-sh-publishing: error
+    - path: "example/invalid"
+      rules:
+        prevent-skills-sh-publishing: error
+    - path: "example/valid"
+      rules:
+        prevent-skills-sh-publishing: error
