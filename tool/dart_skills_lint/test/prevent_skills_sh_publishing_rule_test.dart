@@ -26,6 +26,19 @@ void main() {
       expect(errors.first.message, contains('Missing YAML frontmatter'));
     });
 
+    test('returns no errors when there is a YAML parsing error', () async {
+      final rule = PreventSkillsShPublishingRule(severity: AnalysisSeverity.warning);
+      final context = SkillContext(
+        directory: Directory('dummy'),
+        rawContent: '---\ninvalid: yaml: : mapping\n---\n',
+        yamlParsingError: 'YAML parsing error details',
+      );
+
+      final List<ValidationError> errors = await rule.validate(context);
+
+      expect(errors, isEmpty);
+    });
+
     test('flags when metadata field is missing', () async {
       final rule = PreventSkillsShPublishingRule(severity: AnalysisSeverity.warning);
       final context = SkillContext(

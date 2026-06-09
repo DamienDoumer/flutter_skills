@@ -120,7 +120,11 @@ governs how changes to these rules ship.
 - **Fixable:** no
 - **What it checks:** the YAML frontmatter contains `metadata:` with `internal: true`, which prevents the skill from being published to skills.sh.
 - **Diagnostic shape:**
-  `Missing YAML frontmatter, expected metadata: internal: true.` or `Skill is missing metadata: internal: true in frontmatter.`
+  A multi-line message specifying the exact structural issue. It instructs the developer to remove quotes if `internal` is set to a string, or warns when `metadata` is missing, not a map, or when `internal` is not explicitly set to boolean `true`. Each diagnostic includes the expected schema:
+  ```yaml
+  metadata:
+    internal: true
+  ```
 - **Auto-fix behavior:** none.
 - **Disable:** `--no-prevent-skills-sh-publishing` (also the default state).
 

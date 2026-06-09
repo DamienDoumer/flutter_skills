@@ -28,6 +28,10 @@ class PreventSkillsShPublishingRule extends SkillRule {
   Future<List<ValidationError>> validate(SkillContext context) async {
     final errors = <ValidationError>[];
 
+    if (context.yamlParsingError != null) {
+      return errors;
+    }
+
     if (context.parsedYaml == null) {
       errors.add(
         ValidationError(
