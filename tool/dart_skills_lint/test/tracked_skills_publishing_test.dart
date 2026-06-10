@@ -22,7 +22,7 @@ void main() {
 
     final trackedSkillDirs = <String>{};
     for (final line in lines) {
-      final List<String> parts = p.split(line);
+      final List<String> parts = line.split('/');
       // We look for files inside .agents/skills/<skill-name>/
       // parts[0] is .agents, parts[1] is skills
       if (parts.length >= 4 && parts[0] == '.agents' && parts[1] == 'skills') {
@@ -41,7 +41,7 @@ void main() {
       final expectedPath = '.agents/skills/$skillDir';
 
       for (final DirectoryConfig dirConfig in config.directoryConfigs) {
-        if (dirConfig.path == expectedPath) {
+        if (p.equals(dirConfig.path, expectedPath) || p.isWithin(dirConfig.path, expectedPath)) {
           if (dirConfig.rules['prevent-skills-sh-publishing'] == AnalysisSeverity.error) {
             localEnabled = true;
           }
